@@ -7,7 +7,6 @@
 - Ad blocker
 - Infinite Powerups - hint, shuffle and temporary expansion show 999 without consuming inventory. Normal unlocks still apply.
 - Signing compatibility - handlers for the protection checks, poison writes and self-termination paths, including the file-save freeze fix.
-- Settings message beneath the game version: "I bypassed your fuck-ass VM-based protection ~ Omega172".
 
 ## Beating the bullshit VM-based code virtualization
 
