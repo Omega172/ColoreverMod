@@ -1,0 +1,76 @@
+name: Build and Draft Dylib Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag, for example dylib-v1.0.0. Use a new tag for each release.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-mod-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Read project settings
+        id: settings
+        run: |
+          strConfig="$(python3 Source/Tools/Package.py config "$GITHUB_WORKSPACE")"
+          mapfile -t aConfig <<< "$strConfig"
+          printf 'project_name=%s\n' "${aConfig[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare changelog
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          MOD_NAME: ${{ steps.settings.outputs.project_name }}
+          RELEASE_KIND: dylib
+        run: bash .github/Scripts/PrepareRelease.sh
+
+      - name: Install Theos and iOS toolchain
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/Scripts/SetupTheos.sh
+
+      - name: Test packager
+        run: python3 -B -m unittest discover -s Source/Tests -p 'Test*.py'
+
+      - name: Build dylib
+        run: bash ./Build.sh
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.settings.outputs.project_name }} dylib ${{ inputs.version }}
+          draft: true
+          generate_release_notes: true
+          previous_tag: ${{ steps.notes.outputs.previous_tag }}
+          body_path: ${{ runner.temp }}/ReleaseNotes.md
+          fail_on_unmatched_files: true
+          files: Build/Release/${{ steps.settings.outputs.project_name }}.dylib

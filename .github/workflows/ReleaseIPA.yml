@@ -1,0 +1,95 @@
+name: Build and Draft IPA Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag, for example v1.0.0. Use a new tag for each release.
+        required: true
+        type: string
+      ipa_url:
+        description: Direct HTTPS download URL for the decrypted IPA
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-mod-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Read project settings
+        id: settings
+        run: |
+          strConfig="$(python3 Source/Tools/Package.py config "$GITHUB_WORKSPACE")"
+          mapfile -t aConfig <<< "$strConfig"
+          printf 'project_name=%s\n' "${aConfig[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare changelog
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          MOD_NAME: ${{ steps.settings.outputs.project_name }}
+          RELEASE_KIND: ipa
+        run: bash .github/Scripts/PrepareRelease.sh
+
+      - name: Install Theos and iOS toolchain
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/Scripts/SetupTheos.sh
+
+      - name: Test packager
+        run: python3 -B -m unittest discover -s Source/Tests -p 'Test*.py'
+
+      - name: Download input IPA
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+        run: |
+          if [[ "$IPA_URL" != https://* ]]; then
+            printf '%s\n' 'A direct HTTPS IPA download URL is required.' >&2
+            exit 1
+          fi
+          curl --fail --location --silent --show-error --retry 3 \
+            --proto '=https' --proto-redir '=https' \
+            --connect-timeout 30 --max-time 600 \
+            --output "$RUNNER_TEMP/Input.ipa" -- "$IPA_URL"
+
+      - name: Build and package mod
+        run: bash ./Package.sh "$RUNNER_TEMP/Input.ipa"
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.settings.outputs.project_name }} ${{ inputs.version }}
+          draft: true
+          generate_release_notes: true
+          previous_tag: ${{ steps.notes.outputs.previous_tag }}
+          body_path: ${{ runner.temp }}/ReleaseNotes.md
+          fail_on_unmatched_files: true
+          files: |
+            Build/Release/${{ steps.settings.outputs.project_name }}-NeedsSigning.ipa
+            Build/Release/${{ steps.settings.outputs.project_name }}.dylib

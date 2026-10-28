@@ -1,0 +1,6 @@
+{
+  "ProjectName": "ColoreverMod",
+  "SdkVersion": "16.5",
+  "MinimumIOSVersion": "15.0",
+  "CxxStandard": "c++2b"
+}
