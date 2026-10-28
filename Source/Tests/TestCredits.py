@@ -57,7 +57,7 @@ class clCreditsTests(unittest.TestCase):
             self.assertEqual(z.read("Payload/Example.app/Omega172.png"), self.m_byLogo)
             self.assertEqual(z.read("Payload/Example.app/Info.plist"), self.m_byPlist)
             self.assertEqual(z.getinfo("Payload/Example.app/Omega172.png").external_attr >> 16, 0o100644)
-        self.assertEqual(stReport["branding"], "Mod by Omega172, once per app launch")
+        self.assertEqual(stReport["branding"], "Mod by Omega172")
 
     def test_invalid_logo_is_rejected(self):
         (self.m_pRoot / "Source/Mod/Resources/Omega172.png").write_bytes(b"invalid")

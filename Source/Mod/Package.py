@@ -156,7 +156,7 @@ def customize(zInput, strApp, stInfo, pRoot):
         "unity_original_sha256": STR_UNITY_SHA256,
         "unity_patched_sha256": hashlib.sha256(byUnity).hexdigest(),
         "device_tested": False,
-        "branding": "Mod by Omega172, once per app launch",
+        "branding": "Mod by Omega172",
         "logo_sha256": hashlib.sha256(byLogo).hexdigest(),
         "settings_message": stSettings,
     }
