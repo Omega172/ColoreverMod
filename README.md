@@ -20,6 +20,9 @@ The fingerprints strongly point to Tencent Anti-Cheat Expert (ACE) iOS hardening
 
 ## Build
 
+Packaging prints progress every ten seconds, including elapsed time and temporary IPA size. Simultaneous packaging jobs for the same project are rejected. Wait for the ready-to-sign message before deploying. Large IPAs can take several minutes to write and verify.
+
+
 Edit `Project.json` to set the mod project name, SDK, minimum iOS target and C++ dialect. These settings only affect the mod and its outputs. The app identifiers, name and version are preserved.
 
 Install Theos and its iOS compiler and SDK in Linux. Set `THEOS` to that installation, or use the default `$HOME/theos`. The project path must not contain spaces.
