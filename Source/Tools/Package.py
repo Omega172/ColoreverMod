@@ -181,6 +181,32 @@ def file_hash(pPath):
         return hashlib.file_digest(hInput, "sha256").hexdigest()
 
 
+def copy_compressed_entry(zInput, zOutput, stEntry, uEnd):
+    uSize = uEnd - stEntry.header_offset
+    zInput.fp.seek(stEntry.header_offset)
+    byHeader = zInput.fp.read(30)
+    if len(byHeader) != 30 or byHeader[:4] != b"PK\x03\x04":
+        raise ValueError("Invalid ZIP local header")
+    uName, uExtra = struct.unpack_from("<HH", byHeader, 26)
+    if uSize < 30 + uName + uExtra + stEntry.compress_size or uEnd > zInput.start_dir:
+        raise ValueError("Invalid ZIP entry bounds")
+    stCopy = copy.copy(stEntry)
+    stCopy.header_offset = zOutput.start_dir
+    zOutput._writecheck(stCopy)
+    zOutput.fp.seek(zOutput.start_dir)
+    zInput.fp.seek(stEntry.header_offset)
+    while uSize:
+        byChunk = zInput.fp.read(min(uSize, 1024 * 1024))
+        if not byChunk:
+            raise ValueError("Truncated ZIP entry")
+        zOutput.fp.write(byChunk)
+        uSize -= len(byChunk)
+    zOutput.start_dir = zOutput.fp.tell()
+    zOutput._didModify = True
+    zOutput.filelist.append(stCopy)
+    zOutput.NameToInfo[stCopy.filename] = stCopy
+
+
 def package(pRoot, strInput="", pstCustomize=None):
     stConfig = load_config(pRoot)
     strName = stConfig["ProjectName"]
@@ -197,6 +223,8 @@ def package(pRoot, strInput="", pstCustomize=None):
         strBefore = file_hash(pInput)
         with zipfile.ZipFile(pInput) as zInput:
             aNames = zInput.namelist()
+            aOffsets = sorted(stEntry.header_offset for stEntry in zInput.infolist())
+            aEnds = dict(zip(aOffsets, aOffsets[1:] + [zInput.start_dir]))
             if len(aNames) != len(set(aNames)):
                 raise ValueError("Duplicate ZIP entries")
             for strEntry in aNames:
@@ -243,8 +271,7 @@ def package(pRoot, strInput="", pstCustomize=None):
                         if stEntry.filename in aModified:
                             zOutput.writestr(copy.copy(stEntry), aModified[stEntry.filename])
                         else:
-                            with zInput.open(stEntry) as hSource, zOutput.open(copy.copy(stEntry), "w") as hTarget:
-                                shutil.copyfileobj(hSource, hTarget)
+                            copy_compressed_entry(zInput, zOutput, stEntry, aEnds[stEntry.header_offset])
                     for strEntry, (byContent, uMode) in aAdded.items():
                         stAdded = zipfile.ZipInfo(strEntry)
                         stAdded.create_system = 3
@@ -252,8 +279,9 @@ def package(pRoot, strInput="", pstCustomize=None):
                         stAdded.compress_type = zipfile.ZIP_DEFLATED
                         zOutput.writestr(stAdded, byContent)
                 with zipfile.ZipFile(pTemporary) as zOutput:
-                    if zOutput.testzip() is not None:
-                        raise ValueError("Output ZIP failed CRC verification")
+                    aExpected = (set(aNames) - set(aRemoved)) | set(aAdded)
+                    if set(zOutput.namelist()) != aExpected or len(zOutput.namelist()) != len(aExpected):
+                        raise ValueError("Unexpected output ZIP entries")
                     for strEntry, byContent in aModified.items():
                         if zOutput.read(strEntry) != byContent:
                             raise ValueError("Modified bytes failed verification: " + strEntry)

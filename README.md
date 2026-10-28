@@ -35,6 +35,8 @@ Gameplay and protection logic lives in `Source/Mod/RuntimeHooks.mm`. The package
 
 ### Package a provided IPA
 
+Unchanged files keep their original ZIP compression, avoiding recompression. CRC and retained-file integrity checks still run before publishing the output.
+
 Use the supported decrypted Colorever 1.23.0 IPA. From the project folder:
 
 ```powershell

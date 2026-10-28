@@ -190,6 +190,20 @@ class clPackageTests(unittest.TestCase):
                     mod.package(self.m_pRoot, str(self.m_pInput), customize)
                 self.assertEqual(pOutput.read_bytes(), byBefore)
 
+    def test_corrupt_retained_file_preserves_previous_output(self):
+        pOutput = Path(mod.package(self.m_pRoot)["output"])
+        byPrevious = pOutput.read_bytes()
+        with zipfile.ZipFile(self.m_pInput) as z:
+            stEntry = z.getinfo(self.m_strApp + "Data/Keep.bin")
+        byInput = bytearray(self.m_pInput.read_bytes())
+        uName, uExtra = struct.unpack_from("<HH", byInput, stEntry.header_offset + 26)
+        uData = stEntry.header_offset + 30 + uName + uExtra
+        byInput[uData] ^= 1
+        self.m_pInput.write_bytes(byInput)
+        with self.assertRaises(zipfile.BadZipFile):
+            mod.package(self.m_pRoot)
+        self.assertEqual(pOutput.read_bytes(), byPrevious)
+
     def test_http_input_rejected(self):
         with self.assertRaisesRegex(ValueError, "HTTPS"):
             with mod.input_ipa(self.m_pRoot, "http://example.invalid/app.ipa"):
